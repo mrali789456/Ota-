@@ -1,0 +1,84 @@
+from flask import Flask, render_template, request
+import subprocess
+import os
+import tempfile
+
+app = Flask(__name__)
+
+# Function to compile Arduino code and upload to Arduino
+def compile_and_upload(code):
+    try:
+        # Create a temporary directory for the sketch
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sketch_name = "temp_sketch"
+            sketch_path = os.path.join(temp_dir, sketch_name)
+            os.mkdir(sketch_path)
+
+            # Write the code to a .ino file with the same name as the directory
+            ino_file_path = os.path.join(sketch_path, f"{sketch_name}.ino")
+            with open(ino_file_path, 'w') as file:
+                file.write(code)
+
+            # Specify the build directory
+            build_dir = os.path.join(temp_dir, "build")
+            os.mkdir(build_dir)
+
+            # Compile the code using Arduino CLI with explicit build path
+            compile_result = subprocess.run(
+                ['arduino-cli', 'compile', '--fqbn', 'arduino:avr:uno', '--build-path', build_dir, sketch_path],
+                capture_output=True, text=True
+            )
+
+            # Print the stderr and stdout for debugging purposes
+            print(f"stdout: {compile_result.stdout}")
+            print(f"stderr: {compile_result.stderr}")
+
+            if compile_result.returncode != 0:
+                return f"Compilation failed: {compile_result.stderr}"
+
+            # Debugging: List files in the build directory
+            if not os.path.exists(build_dir):
+                return f"Build directory {build_dir} does not exist."
+
+            print(f"Build directory contents: {os.listdir(build_dir)}")
+
+            # Find the compiled binary
+            binary_file_path = None
+            for root, dirs, files in os.walk(build_dir):
+                print(f"Checking directory: {root}")
+                for file in files:
+                    print(f"Found file: {file}")
+                    if file.endswith('.hex'):
+                        binary_file_path = os.path.join(root, file)
+                        break
+
+            if not binary_file_path or not os.path.isfile(binary_file_path):
+                return "Compiled binary not found."
+
+            # Upload compiled code to Arduino
+            avrdude_cmd = f"avrdude -v -patmega328p -carduino -P/dev/ttyUSB0 -b115200 -D -Uflash:w:{binary_file_path}:i"
+            upload_result = subprocess.run(avrdude_cmd, shell=True, capture_output=True, text=True)
+
+            if upload_result.returncode != 0:
+                return f"Compilation successful, but upload failed: {upload_result.stderr}"
+
+            return "Compilation and upload successful"
+    except FileNotFoundError as e:
+        return f"Error: {str(e)}"
+    except Exception as e:
+        return f"An unexpected error occurred: {str(e)}"
+
+# Home route to render the main HTML page
+@app.route('/')
+def home():
+    return render_template('index.html')
+
+# Route to handle form submission for compiling and uploading code
+@app.route('/compile_upload', methods=['POST'])
+def compile_upload():
+    code = request.form['code']  # Get code from the form
+    result = compile_and_upload(code)  # Call the function to compile and upload
+    return result
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0')

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arduino Compiler and Uploader</title>
+</head>
+<body>
+    <h1>Arduino Compiler and Uploader</h1>
+    <form action="/compile_upload" method="post">
+        <textarea name="code" rows="10" cols="50" placeholder="Enter Arduino code here"></textarea>
+        <br>
+        <button type="submit">Compile and Upload to Arduino</button>
+    </form>
+</body>
+</html>
